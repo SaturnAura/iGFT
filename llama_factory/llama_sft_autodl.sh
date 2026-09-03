@@ -1,1 +1,0 @@
-CUDA_VISIBLE_DEVICES=0 llamafactory-cli train examples/iGFT/SFT/llama2_sft.yaml

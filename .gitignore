@@ -1,0 +1,32 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# ---- OS / editor ----
+.DS_Store
+.idea/
+.vscode/
+
+# ---- Datasets / artifacts ----
+*.zip
+*.pt
+*.dnn
+outputs/
+logs/
+
+# BEIR datasets and generated pseudo-query data inside the vendored SPTAR code
+third_party/SPTAR/dense_retrieval/datasets/
+third_party/SPTAR/pseudo_query/data/
+third_party/SPTAR/dense_retrieval/retriever/col_bert/data/
+third_party/SPTAR/dense_retrieval/retriever/dpr/train/output/
+third_party/SPTAR/dense_retrieval/retriever/bm25ce/eval/output/
+
+# LLaMA-Factory checkpoints and user-created dataset files
+third_party/LLaMA-Factory/saves/
+third_party/LLaMA-Factory/data/*_train.json
+third_party/LLaMA-Factory/data/*_train_rm.json

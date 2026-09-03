@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "igft"
+version = "1.0.0"
+description = "Adaptive query generation for low-resource dense retrieval (KDD '25)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+  { name = "iGFT Contributors" },
+]
+dependencies = [
+  "beir>=1.0.1",
+  "numpy",
+  "pandas",
+  "rank-bm25",
+  "scikit-learn",
+  "sentence-transformers>=2.2.2",
+  "torch>=1.13.1",
+  "tqdm",
+  "transformers>=4.29.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+
+[project.scripts]
+igft-sample-init = "igft.data.sample_init_data:main"
+igft-convert-colbert = "igft.data.convert_colbert_data:main"
+igft-filter = "igft.filtering.filter:main"
+igft-filter-al = "igft.filtering.al:main"
+igft-rerank = "igft.filtering.reranker:main"
+
+[tool.setuptools.packages.find]
+include = ["igft*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"

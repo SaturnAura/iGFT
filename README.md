@@ -1,187 +1,299 @@
-# iGFT For Low Resource Setting
+<div align="center">
 
-This is the implementation of the paper 'From Missteps to Mastery: Enhancing Low-Resource Dense Retrieval through Adaptive Query Generation'
+## Table of Contents
 
-## Download Dataset
+- [Highlights](#highlights)
+- [How It Works](#how-it-works)
+- [Repository Layout](#repository-layout)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [1 · Data Preparation](#1--data-preparation)
+  - [2 · Low-Resource Query Generation](#2--low-resource-query-generation)
+  - [3 · Multi-Stage Data Filtering](#3--multi-stage-data-filtering)
+  - [4 · Reward Model &amp; PPO](#4--reward-model--ppo)
+  - [5 · ColBERT Training &amp; Validation](#5--colbert-training--validation)
+  - [6 · Post-Retrieval Reranking](#6--post-retrieval-reranking)
+- [Other Settings](#other-settings)
+  - [Zero-Shot Setting](#zero-shot-setting)
+  - [Fully-Supervised Setting](#fully-supervised-setting)
+- [Acknowledgments](#acknowledgments)
+- [Citation](#citation)
+- [License](#license)
 
-Download the [BEIR](https://github.com/beir-cellar/beir) dataset using 'utils/download_dataset.sh'
+## Highlights
+
+- **Low-resource by design** — bootstrap a query generator with as few as 50 gold pairs.
+- **Adaptive pseudo-query generation** — supervised fine-tuning followed by reward-model-guided PPO.
+- **Multi-view quality filtering** — sparse (BM25), dense (DPR / ColBERT / MonoT5) and active-learning (loss prediction) signals jointly score synthetic queries.
+- **End-to-end dense retrieval** — filtered pseudo queries train a ColBERT retriever whose output can be refined with MonoT5 reranking.
+- **Three settings in one repo** — low-resource, zero-shot and fully-supervised pipelines.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    subgraph Data["Data"]
+        A[BEIR Corpus] --> B[Gold Pairs]
+        A --> C[Pseudo Queries]
+    end
+
+    subgraph Generator["Query Generator"]
+        D[SFT] --> E[LLM Generator]
+        F[RM + PPO] --> E
+    end
+
+    subgraph Filter["Data Quality Filter"]
+        G[BM25 Sparse]
+        H[DPR / ColBERT / MonoT5 Dense]
+        I[Loss Predictor]
+    end
+
+    B --> D
+    A --> E
+    E --> C
+    C --> Filter
+    Filter --> J[Filtered Weak Queries]
+    J --> K[ColBERT Dense Retriever]
+    A --> K
+    K --> L[Rankings]
+    L --> M[MonoT5 Reranking]
+```
+
+## Repository Layout
+
+```
+iGFT/
+├── igft/                        # iGFT package (data + filtering + reranking)
+│   ├── data/                    #   data sampling / conversion utilities
+│   └── filtering/               #   sparse & dense filters, loss predictor, MonoT5
+├── configs/
+│   └── llamafactory/            # SFT / generation / RM / PPO YAML configs
+├── scripts/                     # unified shell entry points for every stage
+├── third_party/                 # vendored frameworks (kept fully separate)
+│   ├── LLaMA-Factory/           #   LLM fine-tuning & RL backbone
+│   └── SPTAR/                   #   BEIR data prep + ColBERT/DPR retrieval
+├── pyproject.toml               # installs the `igft` package + CLI entry points
+├── requirements.txt             # curated runtime dependencies
+├── requirements-lock.txt        # original fully-pinned environment snapshot
+└── LICENSE                      # MIT
+```
+
+> The vendored frameworks are **not** merged into the `igft` package: LLaMA-Factory
+> and SPTAR each own their CLI, entry points and Python/CUDA environments. Keeping
+> them separate is required for exact reproducibility and clean licensing. See
+> [`third_party/README.md`](third_party/README.md) for origins and installation notes.
+
+## Installation
+
+### 1. iGFT package (query generation + filtering)
+
+Install PyTorch first with the wheel matching your CUDA version, then install the repo:
 
 ```bash
-wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset_name}.zip
+pip install torch --index-url https://download.pytorch.org/whl/cu126
+pip install -e .            # installs igft and its console scripts
+pip install -e third_party/LLaMA-Factory   # provides llamafactory-cli
 ```
 
-`dataset_name` can be nq, fiqa and others.
+### 2. SPTAR / ColBERT retrieval environments
 
-## Initial Data Sample
-
-To simulate a low-resource scenario, we randomly sampled few examples from the training set of the dataset as the initial training data for the large language model. Additionally, we converted these samples into a format suitable for supervised fine-tuning of the large language model. The following code demonstrates this process:
-
-```python
-python utils/sample_init_data.py -dataset dataset_name -num sample_num
-```
-
-In this process, `dataset_name` refers to the dataset being sampled, which includes datasets from BEIR, such as MSMARCO, FiQA, NQ, and others. Ensure that `dataset_name` points to a valid dataset directory that has already been downloaded using the    `utils/download_dataset.sh`  script.
-
-## LLM-based Query Generation
-
-### Setup Llama Factory Environment
-
-To initialize the development environment for `llama_factory`, follow the steps below:
+The retrieval stage reuses the original SPTAR Python 3.7 environment and the ColBERT
+`col37bert` environment:
 
 ```bash
-cd llama_factory
-pip install -e .
+cd third_party/SPTAR
+conda env create -f dense_retrieval/environment.yml                       # py37
+conda env create -f dense_retrieval/retriever/col_bert/col37bert.yml      # col37bert
+cd ../..
 ```
 
-### **Dataset Format Alignment**
+Follow the inline notes in `third_party/SPTAR/dense_retrieval/packages/README.md`
+for the small `beir` / `sentence-transformers` patches used by DPR training.
 
-To ensure compatibility with the `llama_factory` pipeline, place the preprocessed dataset files into the `data/`directory. Subsequently, update the `data/dataset_info.json `file by appending metadata entries corresponding to the newly added dataset files. `dataset_name `is an identifier used in your training or evaluation scripts, and `file_name `is the filename of the dataset located in the `data/` directory
+## Quick Start
+
+### 1 · Data Preparation
+
+Download a BEIR dataset and build the reduced corpora used by retrieval training:
+
+```bash
+bash scripts/download_beir.sh fiqa
+bash scripts/prepare_sptar_corpus.sh fiqa 100k
+```
+
+`prepare_sptar_corpus.sh` follows SPTAR's data-preparation convention: it keeps the
+documents that appear in the gold/pseudo training qrels and samples negatives at a
+fixed ratio. Datasets that were pseudo-query processed before may already contain
+the `corpus_filtered_*_id.tsv` files it expects under
+`third_party/SPTAR/pseudo_query/data/`.
+
+Sample a low-resource training set (50 pairs here). The default output lands at
+`third_party/LLaMA-Factory/data/fiqa_train.json`, and the same pairs are written as
+the `prompt_tuning_50.tsv` qrels file expected by the SPTAR retrieval stage. Use
+`--shuffle` to randomly sample instead of taking the first rows:
+
+```bash
+python -m igft.data.sample_init_data --dataset fiqa --num 50
+```
+
+If you use another dataset, append an entry to `third_party/LLaMA-Factory/data/dataset_info.json`:
 
 ```json
- "dataset_name": {
-    "file_name": "file_name.json",
-    "columns": {
-      "prompt": "instruction",
-      "query": "input",
-      "response": "output"
-    }
+"<dataset>_train": {
+  "file_name": "<dataset>_train.json",
+  "columns": {
+    "prompt": "instruction",
+    "query": "input",
+    "response": "output"
   }
+}
 ```
 
-### Supervised Fine-Tuning
+### 2 · Low-Resource Query Generation
 
-We use the LLaMA-Factory framework to optimize our query generator. First, we perform supervised fine-tuning using the initial data mentioned above. To conduct the supervised fine-tuning, use the following script under the `llama_factory/` directory :
+Supervised fine-tune the query generator:
 
 ```bash
-llamafactory-cli train examples/iGFT/SFT/llama2_sft.yaml
+bash scripts/sft.sh 0
 ```
 
-The detailed configuration of training parameters can be customized in the `llama2_sft.yaml` file, including the LLM (`model_name_or_path`) to be used , the identifier of the training dataset (`dataset`), as well as other training-related hyperparameters and settings.
-
-### Pseudo Query Generation
-
-In our framework, the large language model serves as the query generator backbone to generate pseudo queries. We use the following script under the `llama_factory/` directory to generate queries with the optimized large language model:
+Generate pseudo queries with the tuned adapter (point `adapter_name_or_path` inside
+[`configs/llamafactory/generation.yaml`](configs/llamafactory/generation.yaml) at your
+checkpoint):
 
 ```bash
-llamafactory-cli generation examples/iGFT/Generation/llama2_generation.yaml 
+bash scripts/generate.sh 0
 ```
 
-The `llama2_generation.yaml` file contains the detailed configuration for the generation process. Within this file, the `adapter_name_or_path` parameter specifies the path to the optimized adapter used during inference.
+### 3 · Multi-Stage Data Filtering
 
-### Reward Model Learning
+Generated queries cannot be trusted out of the box. iGFT scores them from several
+complementary perspectives before they can enter retriever training.
 
-Afterward, we score the quality of the pseudo queries using the following filtering modules. Based on the filtering results, we then iteratively optimize the large language model via reinforcement learning.
-
-First, train the necessary reward model for reinforcement learning with the following code:
+**Sparse retrieval signal (BM25):** the target document is mixed into a pool of
+random candidate documents; a pseudo query keeps its score only when BM25 ranks the
+target first.
 
 ```bash
-llamafactory-cli train examples/iGFT/RM/llama2_lora_reward.yaml
+python -m igft.filtering.filter \
+  --pseudo <pseudo_query.json> \
+  --corpus third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/corpus.jsonl \
+  --mode BM25 \
+  --candidate-num 500 \
+  --output outputs/fiqa_bm25.json
 ```
 
-### PPO-based RL Fine-Tuning Phase
-
-We use the PPO algorithm in combination with the previously trained reward model to perform reinforcement learning.
+**Dense semantic signal (DPR / ColBERT / MonoT5):** swap `--mode` for a different
+backbone. `--candidate-num` controls the size of the random distractor pool.
 
 ```bash
-llamafactory-cli train examples/iGFT/PPO/llama2_lora_ppo.yaml
+python -m igft.filtering.filter \
+  --pseudo <pseudo_query.json> \
+  --corpus third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/corpus.jsonl \
+  --mode DPR \
+  --candidate-num 500 \
+  --output outputs/fiqa_dpr.json
 ```
 
-## Multi-Stage Data Filtering
-
-The quality of the generated pseudo queries cannot be assured intrinsically. To mitigate this limitation, we introduce a set of filtering modules that assess the generated queries from multiple complementary perspectives, including sparse retrieval signals, dense semantic representations, and active learning-based uncertainty estimation.
-
-### Filtering with Sparse Retrieval
-
-As an initial step, we apply a sparse retrieval-based filtering module to evaluate the quality of the generated pseudo queries. The core idea is to mix the expected target document into a set of candidate documents, and then use the pseudo query to perform retrieval with a sparse retriever such as `BM25`. The parameter candidate_num defines the total number of documents in the candidate set used during evaluation.
-
-```python
-python Filter/filter.py -pseudo pseudo_file -corpus corpus_file -tofil to_write_file -mode BM25 -candidate_num 500
-```
-
-### Filtering with Dense Retrieval
-
-The dense data quality filtering module introduces a dense retriever, aiming to filter data quality from different perspectives. We support multiple filter backbones, including `DPR`, `ColBERT`, and `MonoT5`, which can be selected based on the desired retrieval paradigm. The code is as follows,
-
-```python
-python Filter/filter.py -pseudo pseudo_file -corpus corpus_file -tofil to_write_file -mode DPR/ColBERT/MonoT5
-```
-
-### Filtering with Loss Prediction Module
-
-The active learning-based module considers how much a pseudo query improves the performance of the retriever being trained. Here, we use prediction loss to train this active learning retriever, starting by obtaining the retriever through a pre-training method.
+**Active-learning loss prediction:** train a loss predictor on the current weak
+queries, then use it to predict how much each pseudo query would improve retriever
+training.
 
 ```bash
-python Filter/al.py -pseudo pseudo_file -corpus corpus_file  -train True
+# train
+python -m igft.filtering.al \
+  --mode train \
+  --pseudo <pseudo_query.json> \
+  --corpus third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/corpus.jsonl
+
+# predict
+python -m igft.filtering.al \
+  --pseudo <pseudo_query.json> \
+  --corpus third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/corpus.jsonl \
+  --output outputs/fiqa_al.json
 ```
 
-Afterward, use the pre-trained loss predictor to predict the potential loss changes caused by the pseudo query.
+### 4 · Reward Model & PPO
+
+The filtered results are used to build a preference dataset (`ranking: true` in
+`dataset_info.json`, each record containing a chosen and a rejected pseudo query).
+Train a reward model and then run PPO:
 
 ```bash
-python Filter/al.py -pseudo pseudo_file -corpus corpus_file -train False -tofile filter_file
+bash scripts/train_reward_model.sh 0
+bash scripts/ppo.sh 0
 ```
 
-## ColBERT Training & Validation
+Repeat **generation → filtering → RM/PPO** as many iterations as needed; the PPO
+output (`saves/ppo`) becomes the next generator checkpoint.
 
-Afterward, the ColBERT  is trained using the filtered pseudo queries. We follow the SPTAR methodology to train our ColBERT.
+### 5 · ColBERT Training & Validation
 
-First, organize the data and convert it into the appropriate format, where `dataset_name` represents the dataset name to be formatted.
+First convert the filtered pseudo queries into the weak-training files consumed by
+the SPTAR loader:
 
 ```bash
-python utils/convert_colbert_data.py -dataset dataset_name -pseudo filtered_pseudo_data
+bash scripts/prepare_colbert_data.sh fiqa outputs/fiqa_filtered.json my_run
 ```
 
-```python
-cd ColBERT
-python dense_retrieval/retriever/dpr/train/gen_data_for_colbert.py --dataset dataset_name --exp_name exp_name 
-```
-
-Next, train the ColBERT model, where `cuda_num` is the CUDA device number used,  `max_step` is the maximum number of training steps, and `save_per_step` is the frequency at which the model is saved.
+Generate the ColBERT collections / triples, train the retriever and evaluate it:
 
 ```bash
-bash  dense_retrieval/retriever/col_bert/train_colbert.sh -g cuda_num -d dataset_name -e exp_name -m max_step -s save_per_step -b batch_size
+bash scripts/gen_colbert_training_data.sh fiqa my_run 100k
+bash scripts/train_colbert.sh -g 0 -d fiqa -e my_run -m 500 -s 500 -b 64
+bash scripts/test_colbert.sh -g 0 -d fiqa -e my_run -p 60 -c 500
 ```
 
-Finally, use this ColBERT model for retrieval and to validate the model's performance
+`train_colbert.sh` and `test_colbert.sh` accept the same flags as the original
+SPTAR scripts (`-g` GPUs, `-d` dataset, `-e` experiment, `-m` max steps, `-s` save
+frequency, `-b` batch size, `-p` partitions, `-c` checkpoint step).
+
+### 6 · Post-Retrieval Reranking
+
+Refine the retrieved candidate lists with MonoT5:
 
 ```bash
-bash  dense_retrieval/retriever/col_bert/test_colbert.sh -g cuda_num -d dataset_name -eexp_name -p par -c step
+python -m igft.filtering.reranker \
+  --corpus third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/corpus.jsonl \
+  --query third_party/SPTAR/dense_retrieval/datasets/raw/beir/fiqa/queries.jsonl \
+  --ranking <retrieval_ranking.tsv>
 ```
 
-## **Post-Retrieval Reranking**
+## Other Settings
 
-After completing the retrieval stage, we apply a reranking process to further refine the retrieved results and improve ranking accuracy. We adopt MonoT5, a  T5 base model that has been pre-trained on the MSMARCO dataset, as our reranker. The code for reranking using the reranker model is as follows, `ranking_file` is the result of dense retrieval.
+### Zero-Shot Setting
 
-```python
- python Filter/reranker.py -corpus_file corpus_file -query_file query_file -ranking_file ranking_file
-```
-
-# iGFT For Zero Shot Setting
-
-In contrast to the low-resource scenario, in a zero-shot scenario, there is no initial data available for supervised fine-tuning of the query generator. Therefore, we use a zero-shot prompt approach to generate pseudo queries. The code is as follows, where `llama2_generation_zero_shot.yaml` is the configuration file for the generation process:
+Without any gold data for supervised fine-tuning, skip SFT and sample pseudo
+queries directly from the base model with a zero-shot prompt:
 
 ```bash
-llamafactory-cli generation examples/iGFT/Generation/llama2_generation_zero_shot.yaml 
+bash scripts/generate_zero_shot.sh 0
 ```
 
-In the zero-shot scenario, apart from query generation, the other steps are the same as in the low-resource scenario and will not be elaborated on further.
+The remaining filtering → retrieval → reranking steps are identical to the
+low-resource setting.
 
-# iGFT in Fully-Supervised Setting
+### Fully-Supervised Setting
 
-In the fully-supervised setting, we initialize the training framework by sampling the entire training set from the original dataset to construct the initial training corpus.  The corresponding script is as follows:
+Use the entire original training split instead of a small sample:
 
 ```bash
-python utils/sample_init_data.py -dataset dataset_name -num -1
+python -m igft.data.sample_init_data --dataset fiqa --num -1
 ```
 
-# Acknowledgments
+## Acknowledgments
 
-The code for the large language model fine-tuning and reinforcement learning in this work is based on the [llama-factory](https://github.com/hiyouga/LLaMA-Factory.git) repository, while the dense retrieval part is based on the [SPTAR](https://github.com/zhiyuanpeng/SPTAR.git) repository. Thanks for their wonderful works.
+The LLM fine-tuning / reinforcement-learning backbone is built on
+[LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory), and the dense retrieval
+part follows [SPTAR](https://github.com/zhiyuanpeng/SPTAR) and
+[ColBERT](https://github.com/stanford-futuredata/ColBERT). Thanks to their authors
+for the excellent open-source work.
 
-# Citation
+## Citation
 
-if you find this repo is helpful, please cite
+If you find this repository useful for your research, please cite:
 
-```
+```bibtex
 @inproceedings{tongigft,
 author = {Tong, Zhenyu and Qin, Chuan and Fang, Chuyu and Yao, Kaichun and Chen, Xi and Zhang, Jingshuai and Zhu, Chen and Zhu, Hengshu},
 title = {From Missteps to Mastery: Enhancing Low-Resource Dense Retrieval through Adaptive Query Generation},
@@ -199,3 +311,8 @@ location = {Toronto ON, Canada},
 series = {KDD '25}
 }
 ```
+
+## License
+
+The iGFT code is released under the [MIT License](LICENSE). The vendored frameworks
+under [`third_party/`](third_party/README.md) remain under their respective licenses.

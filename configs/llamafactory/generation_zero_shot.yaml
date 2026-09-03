@@ -1,0 +1,12 @@
+# iGFT -- Zero-shot pseudo-query generation (no SFT / no adapter)
+
+model_name_or_path: meta-llama/Llama-2-13b-chat-hf  # TODO: local path or HF model id
+
+template: llama2
+finetuning_type: lora
+
+dataset: fiqa_train
+cutoff_len: 1024
+max_samples: 1000
+overwrite_cache: true
+preprocessing_num_workers: 16
