@@ -1,4 +1,16 @@
-<div align="center">
+# iGFT
+
+### From Missteps to Mastery: Enhancing Low-Resource Dense Retrieval through Adaptive Query Generation
+
+Official implementation of adaptive pseudo-query generation for low-resource dense retrieval, published at **KDD '25**.
+
+[![Paper](https://img.shields.io/badge/Paper-DOI%2010.1145%2F3690624.3709225-blue)](https://doi.org/10.1145/3690624.3709225)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen)](pyproject.toml)
+[![LLM Framework](https://img.shields.io/badge/LLM-LLaMA--Factory-8A2BE2)](third_party/README.md)
+[![Retrieval](https://img.shields.io/badge/Retrieval-SPTAR%2FColBERT-4FC3F7)](third_party/README.md)
+
+---
 
 ## Table of Contents
 
