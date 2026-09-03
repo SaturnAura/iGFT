@@ -4,7 +4,7 @@
 
 Official implementation of adaptive pseudo-query generation for low-resource dense retrieval, published at **KDD '25**.
 
-[![Paper](https://img.shields.io/badge/Paper-DOI%2010.1145%2F3690624.3709225-blue)](https://doi.org/10.1145/3690624.3709225)
+[![Paper](<https://img.shields.io/badge/Paper-DOI%2010.1145%2F3690624.3709225-blue>)](https://doi.org/10.1145/3690624.3709225)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen)](pyproject.toml)
 [![LLM Framework](https://img.shields.io/badge/LLM-LLaMA--Factory-8A2BE2)](third_party/README.md)
@@ -285,21 +285,12 @@ for the excellent open-source work.
 If you find this repository useful for your research, please cite:
 
 ```bibtex
-@inproceedings{tongigft,
-author = {Tong, Zhenyu and Qin, Chuan and Fang, Chuyu and Yao, Kaichun and Chen, Xi and Zhang, Jingshuai and Zhu, Chen and Zhu, Hengshu},
-title = {From Missteps to Mastery: Enhancing Low-Resource Dense Retrieval through Adaptive Query Generation},
-year = {2025},
-isbn = {9798400712456},
-publisher = {Association for Computing Machinery},
-address = {New York, NY, USA},
-url = {https://doi.org/10.1145/3690624.3709225},
-doi = {10.1145/3690624.3709225},
-booktitle = {Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.1},
-pages = {1373–1384},
-numpages = {12},
-keywords = {dense retrieval, large language model, query generation},
-location = {Toronto ON, Canada},
-series = {KDD '25}
+@inproceedings{tong2025missteps,
+  title={From missteps to mastery: Enhancing low-resource dense retrieval through adaptive query generation},
+  author={Tong, Zhenyu and Qin, Chuan and Fang, Chuyu and Yao, Kaichun and Chen, Xi and Zhang, Jingshuai and Zhu, Chen and Zhu, Hengshu},
+  booktitle={Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1},
+  pages={1373--1384},
+  year={2025}
 }
 ```
 
