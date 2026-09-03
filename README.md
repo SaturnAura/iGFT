@@ -42,34 +42,12 @@ Official implementation of adaptive pseudo-query generation for low-resource den
 
 ## How It Works
 
-```mermaid
-flowchart LR
-    subgraph Data["Data"]
-        A[BEIR Corpus] --> B[Gold Pairs]
-        A --> C[Pseudo Queries]
-    end
+![iGFT framework](assets/igft-framework.png)
 
-    subgraph Generator["Query Generator"]
-        D[SFT] --> E[LLM Generator]
-        F[RM + PPO] --> E
-    end
-
-    subgraph Filter["Data Quality Filter"]
-        G[BM25 Sparse]
-        H[DPR / ColBERT / MonoT5 Dense]
-        I[Loss Predictor]
-    end
-
-    B --> D
-    A --> E
-    E --> C
-    C --> Filter
-    Filter --> J[Filtered Weak Queries]
-    J --> K[ColBERT Dense Retriever]
-    A --> K
-    K --> L[Rankings]
-    L --> M[MonoT5 Reranking]
-```
+The framework iterates over three stages: adapt a query generator with a handful
+of gold pairs (SFT, then reward-model-guided PPO), score massive pseudo queries
+from sparse / dense / active-learning filters, and train a dense retriever on the
+surviving weak queries.
 
 ## Repository Layout
 
@@ -80,6 +58,7 @@ iGFT/
 │   └── filtering/               #   sparse & dense filters, loss predictor, MonoT5
 ├── configs/
 │   └── llamafactory/            # SFT / generation / RM / PPO YAML configs
+├── assets/                      # official paper framework figure
 ├── scripts/                     # unified shell entry points for every stage
 ├── third_party/                 # vendored frameworks (kept fully separate)
 │   ├── LLaMA-Factory/           #   LLM fine-tuning & RL backbone
