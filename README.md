@@ -5,7 +5,7 @@
 Official implementation of adaptive pseudo-query generation for low-resource dense retrieval, published at **KDD '25**.
 
 [![Paper](<https://img.shields.io/badge/Paper-DOI%2010.1145%2F3690624.3709225-blue>)](https://doi.org/10.1145/3690624.3709225)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen)](pyproject.toml)
 [![LLM Framework](https://img.shields.io/badge/LLM-LLaMA--Factory-8A2BE2)](third_party/README.md)
 [![Retrieval](https://img.shields.io/badge/Retrieval-SPTAR%2FColBERT-4FC3F7)](third_party/README.md)
@@ -66,7 +66,7 @@ iGFT/
 ├── pyproject.toml               # installs the `igft` package + CLI entry points
 ├── requirements.txt             # curated runtime dependencies
 ├── requirements-lock.txt        # original fully-pinned environment snapshot
-└── LICENSE                      # MIT
+└── LICENSE                      # Apache-2.0
 ```
 
 > The vendored frameworks are **not** merged into the `igft` package: LLaMA-Factory
@@ -296,5 +296,6 @@ If you find this repository useful for your research, please cite:
 
 ## License
 
-The iGFT code is released under the [MIT License](LICENSE). The vendored frameworks
-under [`third_party/`](third_party/README.md) remain under their respective licenses.
+The iGFT code is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE)
+for copyright attribution. The vendored frameworks under [`third_party/`](third_party/README.md)
+remain under their respective licenses.
